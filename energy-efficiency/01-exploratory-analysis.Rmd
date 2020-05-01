@@ -31,6 +31,7 @@ library(tableplot)
 library(reshape2)
 library(chemometrics)
 library(pracma)
+library(PerformanceAnalytics)
 ```
 
 # About
@@ -52,7 +53,6 @@ head(df)
 > The dataset contains eight attributes (or features, denoted by X1...X8) and two responses (or outcomes, denoted by y1 and y2). The aim is to use the eight features to predict each of the two responses.
 
 
-
 ```{r}
 class(df)
 ```
@@ -72,6 +72,7 @@ y2 Cooling Load
 ```{r}
 colnames(df)
 ```
+
 ```{r}
 colnames(df) <- c("X1.RelativeCompactness",
 "X2.SurfaceArea",
@@ -117,6 +118,22 @@ ggplot(data = melt.df, aes(x = value)) +
   facet_wrap(~variable, scales = "free")
 ```
 
+## Histograms
+
+```{r}
+par(mfrow=c(2, 5))
+colnames <- colnames(df)
+for (i in 1:10) {
+    hist(as.numeric(unlist(df[,i])), main=colnames[i], probability=TRUE, col="gray", border="white")
+}
+
+```
+
+## Check Correlations
+
+```{r}
+chart.Correlation(df, histogram=TRUE)
+```
 
 ## Outlier Detection
 
@@ -125,7 +142,7 @@ ggplot(data = melt.df, aes(x = value)) +
 ```{r}
 # https://stackoverflow.com/questions/44089894/identifying-the-outliers-in-a-data-set-in-r
 OutVals <-  boxplot(df)$out
-which(df %in% OutVals)
+#which(df %in% OutVals)
 ```
 
 ### Using mahalanobis distances (covariance matrix is singular, find out what it means)
