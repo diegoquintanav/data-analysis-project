@@ -33,7 +33,7 @@ library(chemometrics)
 library(pracma)
 ```
 
-# What
+# About
 
 From UCI's Machine Learning repository description in https://archive.ics.uci.edu/ml/datasets/Energy+efficiency 
 
@@ -46,7 +46,7 @@ From UCI's Machine Learning repository description in https://archive.ics.uci.ed
 
 ```{r}
 df <- readxl::read_xlsx("data/ENB2012_data.xlsx")
-df
+head(df)
 ```
 
 > The dataset contains eight attributes (or features, denoted by X1...X8) and two responses (or outcomes, denoted by y1 and y2). The aim is to use the eight features to predict each of the two responses.
@@ -128,9 +128,9 @@ OutVals <-  boxplot(df)$out
 which(df %in% OutVals)
 ```
 
-### Using mahalanobis distances (matrix is singular, find out what it means)
+### Using mahalanobis distances (covariance matrix is singular, find out what it means)
 
-```{r}
+```{r eval=FALSE}
 # normalize dataset
 m <- df.X
 m <- scale(m, center=TRUE, scale=colSums(m))
