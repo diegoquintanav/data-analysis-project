@@ -238,5 +238,9 @@ mdRobustDistances <- mahalanobis2(df.X, robust = TRUE, inv.pseudo = TRUE, plot =
 mdRobustDistances <- mahalanobis2(df.X, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
 ```
 
-We can assume there are no outliers
+We can assume there are no outliers.
+
+```{r}
+length(mdRobustDistances[mdRobustDistances$isOutlier == TRUE])
+```
 
