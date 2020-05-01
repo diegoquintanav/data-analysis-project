@@ -21,7 +21,7 @@ output:
 ---
 
 ```{r}
-# imports
+# imports for the project
 rm(list=ls())
 knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE)
 library(mice)
