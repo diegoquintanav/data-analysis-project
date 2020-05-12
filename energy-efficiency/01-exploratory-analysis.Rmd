@@ -24,14 +24,15 @@ output:
 # imports for the project
 rm(list=ls())
 knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE)
-library(mice)
+library(mice) # for imputing missing data
 library(psych)
-library(ggplot2)
+library(ggplot2) # for an improved toolset for plots
 library(tableplot)
 library(reshape2)
-library(chemometrics)
+library(chemometrics) # for the mahalanobis distance
 library(pracma)
-library(dplyr)
+library(PerformanceAnalytics) # to plot histograms
+library(dplyr) # for an improved toolset
 
 # add a new comment here
 ```
@@ -251,6 +252,25 @@ We can assume there are no outliers.
 length(mdRobustDistances[mdRobustDistances$isOutlier == TRUE])
 ```
 
+
+
+## Histograms
+```{r}
+par(mfrow=c(2, 5))
+colnames <- colnames(df)
+for (i in 1:10) {
+    hist(as.numeric(unlist(df[,i])), main=colnames[i], probability=TRUE, col="gray", border="white")
+}
+
+```
+
+
+
+## Check Correlations
+
+```{r}
+chart.Correlation(df, histogram=TRUE)
+```
 
 ## Dealing with multicollinearity
 
