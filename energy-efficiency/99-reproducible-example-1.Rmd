@@ -1,0 +1,174 @@
+---
+title: "Reproducible example 1"
+author: "Diego Quintana"
+date: "5/1/2020"
+output: html_document
+---
+
+```{r}
+library(chemometrics)
+```
+
+
+```{r}
+df <- readxl::read_xlsx("data/ENB2012_data.xlsx")
+det(cov(df))
+```
+
+```{r}
+Moutlier(df, quantile = 0.975, plot = TRUE)
+```
+
+```{r}
+X <- scale(df, scale=FALSE)
+mdi <- mahalanobis(X, center = F, cov=var(X), tol=1e-20) # works
+# mdi <- mahalanobis(X, center = F, cov=var(X)) # raises an error
+threshold <- qchisq(0.999, ncol(X))
+densityplot(mdi)
+outliers <- which(mdi >= threshold)
+df.outliers <- df[outliers, ]
+df.outliers
+```
+
+## Custom implementation 1
+
+```{r}
+X2 <- X
+h <- round(nrow(X)*0.75)
+eps <- 0.000001 
+dif_cent <- 1
+i <- 0
+
+while (dif_cent>eps){
+  i <- i+1
+  mean <-apply(X2,2,mean)
+  md2 <- mahalanobis(X, center = mean, cov = var(X2), tol=1e-35)
+  in_md2 <- order(md2)
+  X2 <- X[in_md2[1:h],]
+  dif_cent <- sum((mean - apply(X2,2,mean))**2)
+}
+```
+
+```{r}
+or <- as.data.frame(mdi)
+rob <- as.data.frame(md2)
+m_dist <- cbind(or, rob)
+colnames(m_dist) <- c('Original', 'Robust')
+
+```
+
+
+```{r}
+thres <- qchisq(0.999, ncol(X))
+plot(mdi, md2, type='n',xlab='Original Mahalanobis distance',ylab='Robust Mahalanobis distance')
+text(mdi,md2,labels = rownames(df))
+
+p <- ggplot(m_dist, aes(x=Original, y=Robust)) + geom_point() 
+p <- p + geom_text(label=rownames(m_dist), vjust=-0.5) + geom_vline(xintercept = thres, linetype=2, color='red') + geom_hline(yintercept = thres, linetype=2, color='red')
+p <- p + ggtitle('Mahalanobis Distances')
+p
+# 
+# b <- p + xlim(0, thres) + ylim(0,300)
+# b
+```
+
+
+```{r}
+thres <- qchisq(0.975, ncol(X))
+plot(mdi, md2, type='n',xlab='Original Mahalanobis distance',ylab='Robust Mahalanobis distance')
+text(mdi,md2,labels = rownames(df))
+
+p <- ggplot(m_dist, aes(x=Original, y=Robust)) + geom_point() 
+p <- p + geom_text(label=rownames(m_dist), vjust=-0.5) + geom_vline(xintercept = thres, linetype=2, color='red') + geom_hline(yintercept = thres, linetype=2, color='red')
+p <- p + ggtitle('Mahalanobis Distances')
+p
+
+# b <- p + xlim(0, thres) + ylim(0,300)
+# b
+```
+
+## Custom Implementation 2
+
+```{r own implementation}
+mahalanobis2 <- function(df,
+                         inv.pseudo = FALSE,
+                         robust = TRUE,
+                         plot = TRUE,
+                         tol = 0.975) {
+  # we can use the penrose-moore pseudoinverse instead of the normal inverse
+  # https://stats.stackexchange.com/a/37810/101414
+  
+  # cite this as
+  # kjetil b halvorsen (https://stats.stackexchange.com/users/11887/kjetil-b-halvorsen), Singular covariance matrix in Mahalanobis distance in Matlab, URL (version: 2012-09-22): https://stats.stackexchange.com/q/37810
+  
+  if (robust == TRUE) {
+    # Uses the MCD estimator, according to
+    
+    # Mia Hubert, Peter J. Rousseeuw, Stefan Van Aelst,
+    # 10 - Multivariate Outlier Detection and Robustness,
+    # Editor(s): C.R. Rao, E.J. Wegman, J.L. Solka,
+    # Handbook of Statistics,
+    # Elsevier,
+    # Volume 24,
+    # 2005,
+    # Pages 263-302,
+    # ISSN 0169-7161,
+    # ISBN 9780444511416,
+    # https://doi.org/10.1016/S0169-7161(04)24010-X.
+    
+    # produce the MCD estimates
+    df.mcd <- robustbase::covMcd(df)
+    
+    # center vectors using the MCD estimator
+    xMinusM <- sweep(df, 2L, df.mcd$center)
+    xMinusMTransposed <- t(xMinusM)
+    
+    if (inv.pseudo == TRUE) {
+      inverseCovMatrix <- pinv(df.mcd$cov)
+    } else {
+      # using normal inverse
+      inverseCovMatrix <- solve(df.mcd$cov)
+    }
+    
+    left <- as.matrix(xMinusM) %*% as.matrix(inverseCovMatrix)
+    mdSquared <- left %*% as.matrix(xMinusMTransposed)
+    mdSquaredDiag <- diag(mdSquared)
+    
+  } else {
+    # using classic mahalanobis
+    xMinusM <- scale(df, scale = FALSE)
+    
+    xMinusMTransposed <- t(xMinusM)
+    
+    if (inv.pseudo == TRUE) {
+      inverseCovMatrix <- pinv(var(df))
+    } else {
+      inverseCovMatrix <- solve(var(df))
+    }
+    left <- xMinusM %*% inverseCovMatrix
+    mdSquared <- left %*% xMinusMTransposed
+    mdSquaredDiag <- diag(mdSquared)
+  }
+  
+  distances <- sqrt(mdSquaredDiag)
+  
+  # defining threshold
+  threshold <- sqrt(qchisq(tol, ncol(df)))
+  df$isOutlier <- (distances >= threshold)
+  
+  if (plot == TRUE){
+    plot(densityplot(distances))
+    plot(histogram(distances))
+    # plot(df, col = df$isOutlier)
+    # legend(7,4.3,unique(df$isOutlier),col=1:length(df$isOutlier),pch=1)
+  }
+  
+  wrapper <- NULL
+  wrapper$distances <- distances
+  wrapper$isOutlier <- df$isOutlier
+  return(wrapper)
+}
+
+mdRobustDistances <- mahalanobis2(df, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
+```
+
