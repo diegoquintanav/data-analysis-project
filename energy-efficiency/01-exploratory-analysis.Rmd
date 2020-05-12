@@ -31,8 +31,9 @@ library(tableplot)
 library(reshape2)
 library(chemometrics)
 library(pracma)
-#Add library
-library(PerformanceAnalytics)
+library(dplyr)
+
+# add a new comment here
 ```
 
 # About
@@ -54,6 +55,7 @@ head(df)
 > The dataset contains eight attributes (or features, denoted by X1...X8) and two responses (or outcomes, denoted by y1 and y2). The aim is to use the eight features to predict each of the two responses.
 
 
+
 ```{r}
 class(df)
 ```
@@ -73,7 +75,6 @@ y2 Cooling Load
 ```{r}
 colnames(df)
 ```
-
 ```{r}
 colnames(df) <- c("X1.RelativeCompactness",
 "X2.SurfaceArea",
@@ -119,22 +120,6 @@ ggplot(data = melt.df, aes(x = value)) +
   facet_wrap(~variable, scales = "free")
 ```
 
-## Histograms
-
-```{r}
-par(mfrow=c(2, 5))
-colnames <- colnames(df)
-for (i in 1:10) {
-    hist(as.numeric(unlist(df[,i])), main=colnames[i], probability=TRUE, col="gray", border="white")
-}
-
-```
-
-## Check Correlations
-
-```{r}
-chart.Correlation(df, histogram=TRUE)
-```
 
 ## Outlier Detection
 
@@ -143,7 +128,7 @@ chart.Correlation(df, histogram=TRUE)
 ```{r}
 # https://stackoverflow.com/questions/44089894/identifying-the-outliers-in-a-data-set-in-r
 OutVals <-  boxplot(df)$out
-#which(df %in% OutVals)
+which(df %in% OutVals)
 ```
 
 ### Using mahalanobis distances (covariance matrix is singular, find out what it means)
@@ -214,7 +199,8 @@ mahalanobis2 <- function(df,
     mdSquared <- left %*% as.matrix(xMinusMTransposed)
     mdSquaredDiag <- diag(mdSquared)
     
-  } else {
+  }
+  else {
     # using classic mahalanobis
     xMinusM <- scale(df, scale = FALSE)
     
@@ -241,24 +227,114 @@ mahalanobis2 <- function(df,
     plot(histogram(distances))
     # plot(df, col = df$isOutlier)
     # legend(7,4.3,unique(df$isOutlier),col=1:length(df$isOutlier),pch=1)
-  }
+    }
+  
+  
   
   wrapper <- NULL
   wrapper$distances <- distances
   wrapper$isOutlier <- df$isOutlier
+  wrapper$threshold <- threshold
   return(wrapper)
 }
 
-mdRobustDistances <- mahalanobis2(df.X, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
+mdRobustDistances <- mahalanobis2(df, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
 ```
 
 ```{r}
-mdRobustDistances <- mahalanobis2(df.X, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
+mdRobustDistances <- mahalanobis2(df, robust = TRUE, inv.pseudo = FALSE, plot = TRUE)
 ```
 
 We can assume there are no outliers.
 
 ```{r}
 length(mdRobustDistances[mdRobustDistances$isOutlier == TRUE])
+```
+
+
+## Dealing with multicollinearity
+
+The outlier detection here needs revision. We observed the following
+
+1. the dataset has a near singular covariance matrix: this means that there are linearly dependant rows or attributes in the dataset. See
+
+  1. <https://stats.stackexchange.com/questions/464477/how-to-perform-multivariate-analysis-on-datasets-with-singular-covariance-matrix?noredirect=1#comment858869_464477> for a question about this specific topic.
+  2. <https://stats.stackexchange.com/questions/70899/what-correlation-makes-a-matrix-singular-and-what-are-implications-of-singularit/70910#70910> about the implications of having a singular covariance matrix.
+2. This means that we are in presence of multicollinearity, e.g. the `vif` is not available.
+
+```{r eval=TRUE}
+hldata <- select(df, -(y2.CoolingLoad))
+cldata <- select(df, -(y1.HeatingLoad))
+
+library(car)
+hlmodel <- lm(y1.HeatingLoad ~ . , data=hldata)
+clmodel <- lm(y2.CoolingLoad ~ . , data=cldata)
+```
+
+
+```{r eval=FALSE}
+car::vif(model1) # raises an exception
+```
+
+```{r}
+summary(hlmodel)
+```
+
+
+```{r}
+alias(hlmodel)
+```
+
+We get that roof area (`X4.RoofArea`) is correlated with `X2.SurfaceArea` and `X3.WallArea`. The alternatives we have here are
+
+- drop `X4.RoofArea`, probably dropping Surface Area or Wall Area also
+- transform `X4.RoofArea` into something uncorrelated. Probably merging those features into one.
+
+For now, let's just drop `X4.RoofArea`. 
+
+```{r}
+hlmodel.2 <- lm(y1.HeatingLoad ~ . -X4.RoofArea , data=hldata)
+clmodel.2 <- lm(y2.CoolingLoad ~ . -X4.RoofArea, data=cldata)
+```
+
+```{r}
+alias(hlmodel.2) # doesn't seem to have collinearity
+```
+
+```{r}
+df.2 <- select(df, -(X4.RoofArea))
+det(cov(df.2))
+# [1] 408.141
+```
+
+By dropping X4, we obtain a non singular covariance matrix, and
+
+```{r}
+Moutlier(scale(df.2, center = TRUE, scale = colSums(df.2)),
+         quantile = 0.999,
+         plot = TRUE)
+```
+
+Using our custom method
+
+```{r}
+mdClassicDistances2 <- mahalanobis2(df.2, robust = FALSE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
+mdRobustDistances2 <- mahalanobis2(df.2, robust = TRUE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
+```
+```{r}
+crd <- data.frame(rn = rownames(df.2), dc = mdClassicDistances2$distances, dr = mdRobustDistances2$distances)
+threshold <- mdClassicDistances2$threshold
+
+p <- ggplot(mapping = aes(x = dc, y = dr), data = crd) +   
+  geom_point() +
+  geom_hline(yintercept = threshold, color = "red") +
+  geom_vline(xintercept = threshold, color = "red") +
+  geom_text(aes(label = rownames(crd)), alpha=0.2, hjust = 0.4, vjust = -0.5) +
+  xlab("Classic Mahalanobis Distance") +
+  ylab("Robust Mahalanobis Distance") +
+  labs(title = "Distance-distance plot") +
+  labs(subtitle = "Outlier detection after removing X4.RoofArea")
+
+p
 ```
 
