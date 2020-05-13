@@ -51,8 +51,8 @@ From UCI's Machine Learning repository description in https://archive.ics.uci.ed
 ![Summary from the paper](images/summary-paper.png)
 
 ```{r}
-df <- readxl::read_xlsx("data/ENB2012_data.xlsx")
-head(df)
+energy <- readxl::read_xlsx("data/ENB2012_data.xlsx")
+head(energy)
 ```
 
 > The dataset contains eight attributes (or features, denoted by X1...X8) and two responses (or outcomes, denoted by y1 and y2). The aim is to use the eight features to predict each of the two responses.
@@ -60,7 +60,7 @@ head(df)
 
 
 ```{r}
-class(df)
+class(energy)
 ```
 
 Specifically:
@@ -76,10 +76,10 @@ y1 Heating Load
 y2 Cooling Load
 
 ```{r}
-colnames(df)
+colnames(energy)
 ```
 ```{r}
-colnames(df) <- c("X1.RelativeCompactness",
+colnames(energy) <- c("X1.RelativeCompactness",
 "X2.SurfaceArea",
 "X3.WallArea",
 "X4.RoofArea",
@@ -90,12 +90,12 @@ colnames(df) <- c("X1.RelativeCompactness",
 "y1.HeatingLoad",
 "y2.CoolingLoad")
 
-head(df)
+head(energy)
 ```
 
 
 ```{r}
-describe(df)
+describe(energy)
 ```
 
 ## Converting categorical variables
@@ -121,29 +121,29 @@ rotated to face the four cardinal points.
 
 
 ```{r}
-df$X6.Orientation <- factor(df$X6.Orientation, levels=2:5, labels = c('North','East', 'South','West'))
-df$X8.GlazingAreaDistribution <- factor(df$X8.GlazingAreaDistribution, levels = 0:5, labels = c("No Glazing", "Uniform", 'North','East', 'South','West'))
+energy$X6.Orientation <- factor(energy$X6.Orientation, levels=2:5, labels = c('North','East', 'South','West'))
+energy$X8.GlazingAreaDistribution <- factor(energy$X8.GlazingAreaDistribution, levels = 0:5, labels = c("No Glazing", "Uniform", 'North','East', 'South','West'))
 ```
 
 
 ## Separating in continuous and categorical data
 
 ```{r}
-df.continous <- select(df, -grep("^X[6,8]", colnames(df)))
+energy.continous <- select(energy, -grep("^X[6,8]", colnames(energy)))
 ```
 
 ## Separating datasets in inputs and response variables
 
 ```{r}
-df.X <- df[,-grep("Load$", colnames(df.continous))]
-df.y <- df[,grep("Load$", colnames(df.continous))]
+energy.X <- energy[,-grep("Load$", colnames(energy.continous))]
+energy.y <- energy[,grep("Load$", colnames(energy.continous))]
 ```
 
 
 ## Imputing missing data
 
 ```{r}
-md.pattern(df, plot = FALSE)
+md.pattern(energy, plot = FALSE)
 ```
 
 
@@ -151,8 +151,8 @@ md.pattern(df, plot = FALSE)
 
 ```{r}
 # https://datacritics.com/2018/02/28/melt-your-data-for-fast-visuals-with-your-dataset-in-r/
-melt.df <- melt(df)
-ggplot(data = melt.df, aes(x = value)) + 
+melt.energy <- melt(energy)
+ggplot(data = melt.energy, aes(x = value)) + 
   stat_density() + 
   facet_wrap(~variable, scales = "free")
 ```
@@ -164,15 +164,15 @@ ggplot(data = melt.df, aes(x = value)) +
 
 ```{r}
 # https://stackoverflow.com/questions/44089894/identifying-the-outliers-in-a-data-set-in-r
-OutVals <-  boxplot(df)$out
-which(df %in% OutVals)
+OutVals <-  boxplot(energy)$out
+which(energy %in% OutVals)
 ```
 
 ### Using mahalanobis distances (covariance matrix is singular, find out what it means)
 
 ```{r eval=FALSE}
 # normalize dataset
-m <- df.X
+m <- energy.X
 m <- scale(m, center=TRUE, scale=colSums(m))
 Moutlier(m, quantile = 0.975, plot = TRUE)
 ```
@@ -188,11 +188,11 @@ We can check the condition number
 # https://stackoverflow.com/questions/50928796/system-is-computationally-singular-reciprocal-condition-number-in-r
 # https://en.wikipedia.org/wiki/Condition_number
 # https://stats.stackexchange.com/questions/37743/singular-covariance-matrix-in-mahalanobis-distance-in-matlab
-kappa(as.matrix(df.X))
+kappa(as.matrix(energy.X))
 ```
 
 ```{r, include=TRUE, echo=TRUE }
-mahalanobis2 <- function(df,
+mahalanobis2 <- function(energy,
                          inv.pseudo = FALSE,
                          robust = TRUE,
                          plot = TRUE,
@@ -219,17 +219,17 @@ mahalanobis2 <- function(df,
     # https://doi.org/10.1016/S0169-7161(04)24010-X.
     
     # produce the MCD estimates
-    df.mcd <- robustbase::covMcd(df)
+    energy.mcd <- robustbase::covMcd(energy)
     
     # center vectors using the MCD estimator
-    xMinusM <- sweep(df, 2L, df.mcd$center)
+    xMinusM <- sweep(energy, 2L, energy.mcd$center)
     xMinusMTransposed <- t(xMinusM)
     
     if (inv.pseudo == TRUE) {
-      inverseCovMatrix <- pinv(df.mcd$cov)
+      inverseCovMatrix <- pinv(energy.mcd$cov)
     } else {
       # using normal inverse
-      inverseCovMatrix <- solve(df.mcd$cov)
+      inverseCovMatrix <- solve(energy.mcd$cov)
     }
     
     left <- as.matrix(xMinusM) %*% as.matrix(inverseCovMatrix)
@@ -239,14 +239,14 @@ mahalanobis2 <- function(df,
   }
   else {
     # using classic mahalanobis
-    xMinusM <- scale(df, scale = FALSE)
+    xMinusM <- scale(energy, scale = FALSE)
     
     xMinusMTransposed <- t(xMinusM)
     
     if (inv.pseudo == TRUE) {
-      inverseCovMatrix <- pinv(var(df))
+      inverseCovMatrix <- pinv(var(energy))
     } else {
-      inverseCovMatrix <- solve(var(df))
+      inverseCovMatrix <- solve(var(energy))
     }
     left <- xMinusM %*% inverseCovMatrix
     mdSquared <- left %*% xMinusMTransposed
@@ -256,30 +256,30 @@ mahalanobis2 <- function(df,
   distances <- sqrt(mdSquaredDiag)
   
   # defining threshold
-  threshold <- sqrt(qchisq(tol, ncol(df)))
-  df$isOutlier <- (distances >= threshold)
+  threshold <- sqrt(qchisq(tol, ncol(energy)))
+  energy$isOutlier <- (distances >= threshold)
   
   if (plot == TRUE){
     plot(densityplot(distances))
     plot(histogram(distances))
-    # plot(df, col = df$isOutlier)
-    # legend(7,4.3,unique(df$isOutlier),col=1:length(df$isOutlier),pch=1)
+    # plot(energy, col = energy$isOutlier)
+    # legend(7,4.3,unique(energy$isOutlier),col=1:length(energy$isOutlier),pch=1)
     }
   
   
   
   wrapper <- NULL
   wrapper$distances <- distances
-  wrapper$isOutlier <- df$isOutlier
+  wrapper$isOutlier <- energy$isOutlier
   wrapper$threshold <- threshold
   return(wrapper)
 }
 
-mdRobustDistances <- mahalanobis2(df.continous, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
+mdRobustDistances <- mahalanobis2(energy.continous, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
 ```
 
 ```{r}
-mdRobustDistances <- mahalanobis2(df.continous, robust = TRUE, inv.pseudo = FALSE, plot = TRUE)
+mdRobustDistances <- mahalanobis2(energy.continous, robust = TRUE, inv.pseudo = FALSE, plot = TRUE)
 ```
 
 We can assume there are no outliers.
@@ -293,9 +293,9 @@ length(mdRobustDistances[mdRobustDistances$isOutlier == TRUE])
 ## Histograms
 ```{r}
 par(mfrow=c(2, 5))
-colnames <- colnames(df)
+colnames <- colnames(energy)
 for (i in 1:10) {
-    hist(as.numeric(unlist(df[,i])), main=colnames[i], probability=TRUE, col="gray", border="white")
+    hist(as.numeric(unlist(energy[,i])), main=colnames[i], probability=TRUE, col="gray", border="white")
 }
 
 ```
@@ -306,7 +306,7 @@ for (i in 1:10) {
 
 ```{r}
 # not considering categorical variables
-chart.Correlation(df.continous, histogram=TRUE)
+chart.Correlation(energy.continous, histogram=TRUE)
 ```
 
 ## Dealing with multicollinearity
@@ -320,8 +320,8 @@ The outlier detection here needs revision. We observed the following
 2. This means that we are in presence of multicollinearity, e.g. the `vif` is not available.
 
 ```{r eval=TRUE}
-hldata <- select(df, -(y2.CoolingLoad))
-cldata <- select(df, -(y1.HeatingLoad))
+hldata <- select(energy, -(y2.CoolingLoad))
+cldata <- select(energy, -(y1.HeatingLoad))
 
 library(car)
 hlmodel <- lm(y1.HeatingLoad ~ . , data=hldata)
@@ -360,15 +360,15 @@ alias(hlmodel.2) # doesn't seem to have collinearity
 ```
 
 ```{r}
-df.2 <- select(df.continous, -(X4.RoofArea))
-det(cov(df.2))
+energy.2 <- select(energy.continous, -(X4.RoofArea))
+det(cov(energy.2))
 # [1] 146.1685
 ```
 
 By dropping X4, we obtain a non singular covariance matrix, and
 
 ```{r}
-Moutlier(scale(df.2, center = TRUE, scale = colSums(df.2)),
+Moutlier(scale(energy.2, center = TRUE, scale = colSums(energy.2)),
          quantile = 0.999,
          plot = TRUE)
 ```
@@ -377,11 +377,11 @@ Using our custom method
 
 ```{r}
 set.seed(42)
-mdClassicDistances2 <- mahalanobis2(df.2, robust = FALSE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
-mdRobustDistances2 <- mahalanobis2(df.2, robust = TRUE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
+mdClassicDistances2 <- mahalanobis2(energy.2, robust = FALSE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
+mdRobustDistances2 <- mahalanobis2(energy.2, robust = TRUE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
 ```
 ```{r}
-crd <- data.frame(rn = rownames(df.2), dc = mdClassicDistances2$distances, dr = mdRobustDistances2$distances)
+crd <- data.frame(rn = rownames(energy.2), dc = mdClassicDistances2$distances, dr = mdRobustDistances2$distances)
 threshold <- mdClassicDistances2$threshold
 
 p <- ggplot(mapping = aes(x = dc, y = dr), data = crd) +   
@@ -411,9 +411,9 @@ set.seed(42)
 
 
 ```{r}
-targets <- grep("Load$", colnames(df))
-categoricals <- grep("^X[6,8]", colnames(df))
-PCA(df, quali.sup = categoricals, quanti.sup = targets, scale.unit = TRUE)
+targets <- grep("Load$", colnames(energy))
+categoricals <- grep("^X[6,8]", colnames(energy))
+PCA(energy, quali.sup = categoricals, quanti.sup = targets, scale.unit = TRUE)
 ```
 
 
