@@ -21,9 +21,14 @@ output:
 ---
 
 ```{r}
-# imports for the project
+# starting from scratch
 rm(list=ls())
 knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+```{r}
+# imports for the project
 library(mice) # for imputing missing data
 library(psych)
 library(ggplot2) # for an improved toolset for plots
@@ -33,6 +38,14 @@ library(chemometrics) # for the mahalanobis distance
 library(pracma)
 library(PerformanceAnalytics) # to plot histograms
 library(dplyr) # for an improved toolset
+
+
+# clustering
+library(FactoMineR)
+library(factoextra)
+library(plotrix)
+library(gplots)
+library(tableplot)
 
 
 set.seed(42)
@@ -400,11 +413,6 @@ p
 # PCA
 
 ```{r}
-library(FactoMineR)
-library(factoextra)
-library(plotrix)
-library(gplots)
-library(tableplot)
 
 set.seed(42)
 ```
@@ -413,7 +421,59 @@ set.seed(42)
 ```{r}
 targets <- grep("Load$", colnames(energy))
 categoricals <- grep("^X[6,8]", colnames(energy))
-PCA(energy, quali.sup = categoricals, quanti.sup = targets, scale.unit = TRUE)
+energy.pca <- PCA(energy, quali.sup = categoricals, quanti.sup = targets, scale.unit = TRUE)
 ```
 
+It seems that the first dimension of this PCA covers about 61% of the total variance in the dataset, and the second component covers about 20%, addding up to a total of ~80% of the total variance. Clusters of individuals are already visible from the plot of individuals.
+
+From the screeplot we see that the first three components have almost all of the information available (~99.047%). In other words, the dimensionality of the dataset can be heavily reduced.
+
+```{r}
+fviz_screeplot(energy.pca, addlabels = TRUE, ylim = c(0, 45))
+```
+
+```{r}
+fviz_pca_biplot(energy.pca)
+```
+
+```{r}
+summary(energy.pca, ncp = 3)
+```
+
+```{r}
+# Control variable colors using their contributions
+fviz_pca_var(energy.pca, col.var="cos2", col.quanti.sup = "green",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping
+             )
+```
+
+```{r eval=FALSE}
+# Control variable colors using their contributions
+# currently not
+fviz_pca_ind(energy.pca, col.ind = "coord",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = FALSE # Avoid text overlapping. WARNING: If set to true it takes too much time and crashes R
+             )
+```
+
+
+# Clustering
+
+
+```{r}
+energy.hcpc <- HCPC(energy.pca, nb.clust = -1, consol = FALSE)
+```
+
+
+
+```{r}
+barplot(energy.hcpc$call$t$inert.gain[1:10])
+```
+
+From the information above, we decide to stick with 6 clusters, *just because*.
+
+```{r}
+energy.hcpc.consol <- HCPC(energy.pca, nb.clust = 6, consol = TRUE)
+```
 
