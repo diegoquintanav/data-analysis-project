@@ -34,6 +34,8 @@ library(pracma)
 library(PerformanceAnalytics) # to plot histograms
 library(dplyr) # for an improved toolset
 
+
+set.seed(42)
 # add a new comment here
 ```
 
@@ -96,11 +98,45 @@ head(df)
 describe(df)
 ```
 
+## Converting categorical variables
+
+Continous variables:
+X1,X2,X3,X4,X5,X7
+
+Categorical variables: 
+X6: 4 types of orientation: North, East, South, West
+X8: 6 types of glazing area distribution: Uniform, North, East, South, West and No Glazing areas.
+
+
+> We used three types of glazing areas, which are expressed as
+percentages of the floor area: 10%, 25%, and 40%. Furthermore, five
+different distribution scenarios for each glazing area were simu-
+lated: (1) uniform: with 25% glazing on each side, (2) north: 55% on
+the north side and 15% on each of the other sides, (3) east: 55% on
+the east side and 15% on each of the other sides, (4) south: 55% on
+the south side and 15% on each of the other sides, and (5) west: 55%
+on the west side and 15% on each of the other sides. In addition,
+we obtained samples with no glazing areas. Finally, all shapes were
+rotated to face the four cardinal points.
+
+
+```{r}
+df$X6.Orientation <- factor(df$X6.Orientation, levels=2:5, labels = c('North','East', 'South','West'))
+df$X8.GlazingAreaDistribution <- factor(df$X8.GlazingAreaDistribution, levels = 0:5, labels = c("No Glazing", "Uniform", 'North','East', 'South','West'))
+```
+
+
+## Separating in continuous and categorical data
+
+```{r}
+df.continous <- select(df, -grep("^X[6,8]", colnames(df)))
+```
+
 ## Separating datasets in inputs and response variables
 
 ```{r}
-df.X <- df[,-grep("Load$", colnames(df))]
-df.y <- df[,grep("Load$", colnames(df))]
+df.X <- df[,-grep("Load$", colnames(df.continous))]
+df.y <- df[,grep("Load$", colnames(df.continous))]
 ```
 
 
@@ -124,7 +160,7 @@ ggplot(data = melt.df, aes(x = value)) +
 
 ## Outlier Detection
 
-### Using plain euclidean distances
+### Univariate outlier analysis
 
 ```{r}
 # https://stackoverflow.com/questions/44089894/identifying-the-outliers-in-a-data-set-in-r
@@ -148,7 +184,7 @@ This matrix is not invertible. Two fundamental linear algebra properties:
 
 We can check the condition number
 
-```{r}
+```{r eval=FALSE}
 # https://stackoverflow.com/questions/50928796/system-is-computationally-singular-reciprocal-condition-number-in-r
 # https://en.wikipedia.org/wiki/Condition_number
 # https://stats.stackexchange.com/questions/37743/singular-covariance-matrix-in-mahalanobis-distance-in-matlab
@@ -239,11 +275,11 @@ mahalanobis2 <- function(df,
   return(wrapper)
 }
 
-mdRobustDistances <- mahalanobis2(df, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
+mdRobustDistances <- mahalanobis2(df.continous, robust = TRUE, inv.pseudo = TRUE, plot = TRUE)
 ```
 
 ```{r}
-mdRobustDistances <- mahalanobis2(df, robust = TRUE, inv.pseudo = FALSE, plot = TRUE)
+mdRobustDistances <- mahalanobis2(df.continous, robust = TRUE, inv.pseudo = FALSE, plot = TRUE)
 ```
 
 We can assume there are no outliers.
@@ -269,7 +305,8 @@ for (i in 1:10) {
 ## Check Correlations
 
 ```{r}
-chart.Correlation(df, histogram=TRUE)
+# not considering categorical variables
+chart.Correlation(df.continous, histogram=TRUE)
 ```
 
 ## Dealing with multicollinearity
@@ -293,8 +330,9 @@ clmodel <- lm(y2.CoolingLoad ~ . , data=cldata)
 
 
 ```{r eval=FALSE}
-car::vif(model1) # raises an exception
+car::vif(hlmodel) # raises an exception, there are aliased coefficients in the model
 ```
+
 
 ```{r}
 summary(hlmodel)
@@ -322,9 +360,9 @@ alias(hlmodel.2) # doesn't seem to have collinearity
 ```
 
 ```{r}
-df.2 <- select(df, -(X4.RoofArea))
+df.2 <- select(df.continous, -(X4.RoofArea))
 det(cov(df.2))
-# [1] 408.141
+# [1] 146.1685
 ```
 
 By dropping X4, we obtain a non singular covariance matrix, and
@@ -338,6 +376,7 @@ Moutlier(scale(df.2, center = TRUE, scale = colSums(df.2)),
 Using our custom method
 
 ```{r}
+set.seed(42)
 mdClassicDistances2 <- mahalanobis2(df.2, robust = FALSE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
 mdRobustDistances2 <- mahalanobis2(df.2, robust = TRUE, inv.pseudo = FALSE, plot = TRUE, tol = 0.999)
 ```
@@ -357,4 +396,23 @@ p <- ggplot(mapping = aes(x = dc, y = dr), data = crd) +
 
 p
 ```
+
+# PCA
+
+```{r}
+library(FactoMineR)
+library(factoextra)
+library(plotrix)
+library(gplots)
+library(tableplot)
+
+set.seed(42)
+```
+
+
+```{r}
+targets <- grep("Load$", colnames(df))
+PCA(df, quanti.sup = targets, scale.unit = TRUE)
+```
+
 
