@@ -1,0 +1,223 @@
+---
+title: "WorldHappiness"
+author: "Manuel Breve"
+date: "5/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r message=FALSE}
+# imports for the project
+library(mice) # for imputing missing data
+library(psych)
+library(ggplot2) # for an improved toolset for plots
+library(tableplot)
+library(reshape2)
+library(chemometrics) # for the mahalanobis distance
+library(pracma)
+library(PerformanceAnalytics) # to plot histograms
+library(dplyr) # for an improved toolset
+library(tibble) # rownames_to_column and viceversa
+
+
+# clustering
+library(FactoMineR)
+library(factoextra)
+library(plotrix)
+library(gplots)
+library(tableplot)
+
+setwd("~/Documents/Data_Science/MIRI/2. MVA/HappinessProject")
+set.seed(42)
+```
+
+***
+
+### Dataset
+- [,1] Regional indicator:
+- [,2] Ladder.score (RESPONSE VARIABLE) - national average response to the question of life evaluations. 
+- [,3] Standard.error.of.ladder.score
+- [,4] upperwhisker
+- [,5] lowerwhisker
+- [,6] Logged.GDP.per.capita
+- [,7] Social.support - Having someone to count on in times of trouble.
+- [,8] Healthy.life.expectancy - Health life expectancies at birth, based on data extracted from the WHO.
+- [,9] Freedom.to.make.life.choices - Freedom to make life choices is the national average of responses to the GWP question.          
+- [,10] Generosity - Residual of regressing national average of response to the GWP question “Have you donated money to a charity in the past month?                      
+- [,11] Perceptions.of.corruption -  national average of the survey responses to two questions in the GWP: “Is corruption widespread throughout the government or not” and “Is corruption widespread within businesses or not?”                 
+- [,12] Ladder.score.in.Dystopia                  
+- [,13] Explained.by..Log.GDP.per.capita         
+- [,14] Explained.by..Social.support             
+- [,15] Explained.by..Healthy.life.expectancy    
+- [,16] Explained.by..Freedom.to.make.life.choices
+- [,17] Explained.by..Generosity                 
+- [,18] Explained.by..Perceptions.of.corruption  
+- [,19] Dystopia...residual   
+
+```{r}
+path <- "~/Documents/Data_Science/MIRI/2. MVA/HappinessProject/WHR20_DataForFigure2.1.csv"
+df <- read.csv(path, header = TRUE, sep = ",", dec=".", row.names=1)
+summary(df)
+```
+
+```{r}
+df <- df[c(1,6,7,8,9,10,11,19,2)]
+names(df)
+#str(df)
+#summary(df)
+```
+
+```{r}
+df$Regional.indicator.num <- factor(df$Regional.indicator, levels=c('Central and Eastern Europe',
+                                                                    'Commonwealth of Independent States',
+                                                                    'East Asia',
+                                                                    'Latin America and Caribbean',
+                                                                    'Middle East and North Africa',
+                                                                    'North America and ANZ',
+                                                                    'South Asia',
+                                                                    'Southeast Asia',
+                                                                    'Sub-Saharan Africa',
+                                                                    'Western Europe'
+                                                                    )
+                                , labels = 1:10)
+
+df$Regional.indicator.num <- as.numeric(levels(df$Regional.indicator.num))[df$Regional.indicator.num]
+df <- df %>% select(1,10, 2:9)
+```
+
+```{r}
+chart.Correlation(df[2:10], histogram=TRUE)
+```
+
+***
+### Outliers 
+#### Univaritare Outliers 
+```{r Boxplots}
+gplot <- function(z){
+  ggplot(data=df, aes(x=factor(''), y=df[,z])) + geom_boxplot(fill="azure3", outlier.color = "red", outlier.shape = 1) + theme(legend.position='none') + labs(title = paste(colnames(df)[z]), x="",y="")
+}
+p1 <- gplot(2)
+p2 <- gplot(3)
+p3 <- gplot(4)
+p4 <- gplot(5)
+p5 <- gplot(6)
+p6 <- gplot(7)
+p7 <- gplot(8)
+p8 <- gplot(9)
+p9 <- gplot(10)
+
+gridExtra::grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,p9, nrow=3, ncol=3)
+rm(p1,p2,p3,p4,p5,p6,p7,p8,p9)
+```
+An observation _x_ declared an extreme outlier if it lies outlisde of the interval $(Q1-3\cdot IQR, Q3+3\cdot IQR)$, where $IQR=Q3-Q1$ is called the Interquartile Range. 
+An observation _x_ is declared a mild outlier if it lies outside of the interval  $(Q1-1.5\cdot IQR, Q3+1.5\cdot IQR)$
+```{r}
+uni.outlier <-function(z, mod=c("extreme","mild")){
+  mod <- match.arg(mod)
+  if (mod == "extreme") {
+      extremelower <- as.numeric(quantile(df[,z],0.25)-(3*IQR(df[,z])))
+      extremeupper <- as.numeric(quantile(df[,z],0.75)+(3*IQR(df[,z])))
+      outliers <- df %>% rownames_to_column('city') %>%
+        filter(df[,z]<extremelower | df[,z]>extremeupper) %>%
+        column_to_rownames('city')
+      return(outliers)
+  } else if (mod == "mild") {
+    extremelower <- as.numeric(quantile(df[,z],0.25)-(1.5*IQR(df[,z])))
+    extremeupper <- as.numeric(quantile(df[,z],0.75)+(1.5*IQR(df[,z])))
+    outliers <- df %>% rownames_to_column('city') %>%
+      filter(df[,z]<extremelower | df[,z]>extremeupper) %>%
+      column_to_rownames('city')
+    return(outliers)
+  } 
+} 
+
+gdp.uniout <- uni.outlier(3,mod = "extreme") # No outliers
+gdp.uniout1 <- uni.outlier(3,mod = "mild")   # No outliers
+support.uniout <- uni.outlier(4,mod = "extreme")  # No outliers
+(support.uniout1 <- uni.outlier(4,mod = "mild")) 
+health.uniout <- uni.outlier(5,mod = "extreme")   # No outliers
+health.uniout1 <- uni.outlier(5,mod = "mild")     # No outliers
+free.uniout <- uni.outlier(6,mod = "extreme")     # No outliers
+(free.uniout1 <- uni.outlier(6,mod = "mild"))
+gene.uniout <- uni.outlier(7,mod = "extreme")     # No outliers
+(gene.uniout1 <- uni.outlier(7,mod = "mild"))
+(corr.uniout <- uni.outlier(8,mod = "extreme"))
+(corr.uniout1 <- uni.outlier(8,mod = "mild"))
+dys.uniout <- uni.outlier(9,mod = "extreme")      # No outliers
+(dys.uniout1 <- uni.outlier(9,mod = "mild")) 
+ladder.uniout <- uni.outlier(10,mod = "extreme")   # No outliers
+ladder.uniout1 <- uni.outlier(10,mod = "mild")    # No outliers
+
+
+rm(gdp.uniout, gdp.uniout1, support.uniout, support.uniout1, health.uniout, health.uniout1, free.uniout, free.uniout1, gene.uniout, gene.uniout1, corr.uniout, corr.uniout1, dys.uniout, dys.uniout1, ladder.uniout, ladder.uniout1)
+```
+
+
+#### Multivariate Outliers
+```{r}
+outliers <- Moutlier(df, quantile = 0.975, plot = TRUE)
+```
+
+```{r}
+set.seed(42)
+outliers$cutoff
+
+distances <- outliers$md
+isOutlier <- (distances >= outliers$cutoff)
+
+robust_distances <- outliers$rd
+is_robust_Outlier <- (robust_distances >= outliers$cutoff)
+
+table(isOutlier)
+table(is_robust_Outlier)
+
+```
+
+
+```{r}
+res.pca <- PCA(df, quali.sup = 1, quanti.sup= 9, scale.unit = TRUE)
+```
+
+```{r}
+#Screeplot
+fviz_screeplot(res.pca, addlabels = TRUE)
+```
+
+```{r}
+#4 significant dimenions
+significant_dimensions <- 5
+coordinates <- res.pca$ind$coord[,1:significant_dimensions]
+coordinates <- data.frame(coordinates)
+hcpc <- HCPC(coordinates ,nb.clust = -1, consol = F, graph = FALSE)
+barplot(hcpc$call$t$inert.gain[1:20])
+```
+```{r}
+nc <- 6
+final_hcpc <- HCPC (coordinates, nb.clust = nc, graph = TRUE)
+```
+
+```{r}
+fviz_dend(final_hcpc, 
+          cex = 0.7,                     # Label size
+          palette = "jco",               # Color palette see ?ggpubr::ggpar
+          rect = TRUE, rect_fill = TRUE, # Add rectangle around groups
+          rect_border = "jco",           # Rectangle color
+          #labels_track_height = 0.8      # Augment the room for labels
+          )
+```
+
+```{r}
+cut <- final_hcpc$data.clust$clust
+table(cut)
+catdes(cbind(as.factor(cut),df),1,proba = 0.0001)
+```
+```{r}
+final_hcpc$desc.ind$para
+```
+```{r}
+clusters <- cbind(res.pca$ind$coord[,1:2],cut,df)
+clusters
+```
+
