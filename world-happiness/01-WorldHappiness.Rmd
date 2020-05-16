@@ -5,9 +5,14 @@ date: "5/15/2020"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+```{r}
+# starting from scratch
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, message = FALSE, warning = FALSE)
 ```
+
+
 ```{r message=FALSE}
 # imports for the project
 library(mice) # for imputing missing data
@@ -29,7 +34,6 @@ library(plotrix)
 library(gplots)
 library(tableplot)
 
-setwd("~/Documents/Data_Science/MIRI/2. MVA/HappinessProject")
 set.seed(42)
 ```
 
@@ -44,7 +48,7 @@ set.seed(42)
 - [,6] Logged.GDP.per.capita
 - [,7] Social.support - Having someone to count on in times of trouble.
 - [,8] Healthy.life.expectancy - Health life expectancies at birth, based on data extracted from the WHO.
-- [,9] Freedom.to.make.life.choices - Freedom to make life choices is the national average of responses to the GWP question.          
+- [,9] Freedom.to.make.life.choices - Freedom to make life choices is the national average of responses to the GWP question.
 - [,10] Generosity - Residual of regressing national average of response to the GWP question “Have you donated money to a charity in the past month?                      
 - [,11] Perceptions.of.corruption -  national average of the survey responses to two questions in the GWP: “Is corruption widespread throughout the government or not” and “Is corruption widespread within businesses or not?”                 
 - [,12] Ladder.score.in.Dystopia                  
@@ -57,7 +61,7 @@ set.seed(42)
 - [,19] Dystopia...residual   
 
 ```{r}
-path <- "~/Documents/Data_Science/MIRI/2. MVA/HappinessProject/WHR20_DataForFigure2.1.csv"
+path <- "data/WHR20_DataForFigure2.1.csv"
 df <- read.csv(path, header = TRUE, sep = ",", dec=".", row.names=1)
 summary(df)
 ```
@@ -65,8 +69,6 @@ summary(df)
 ```{r}
 df <- df[c(1,6,7,8,9,10,11,19,2)]
 names(df)
-#str(df)
-#summary(df)
 ```
 
 ```{r}
@@ -111,8 +113,10 @@ p9 <- gplot(10)
 gridExtra::grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,p9, nrow=3, ncol=3)
 rm(p1,p2,p3,p4,p5,p6,p7,p8,p9)
 ```
-An observation _x_ declared an extreme outlier if it lies outlisde of the interval $(Q1-3\cdot IQR, Q3+3\cdot IQR)$, where $IQR=Q3-Q1$ is called the Interquartile Range. 
-An observation _x_ is declared a mild outlier if it lies outside of the interval  $(Q1-1.5\cdot IQR, Q3+1.5\cdot IQR)$
+An observation _x_ declared an *extreme outlier* if it lies outside of the interval $(Q1-3\cdot IQR, Q3+3\cdot IQR)$, where $IQR=Q3-Q1$ is called the Interquartile Range. 
+
+An observation _x_ is declared a *mild outlier* if it lies outside of the interval  $(Q1-1.5\cdot IQR, Q3+1.5\cdot IQR)$
+
 ```{r}
 uni.outlier <-function(z, mod=c("extreme","mild")){
   mod <- match.arg(mod)
@@ -213,9 +217,11 @@ cut <- final_hcpc$data.clust$clust
 table(cut)
 catdes(cbind(as.factor(cut),df),1,proba = 0.0001)
 ```
+
 ```{r}
 final_hcpc$desc.ind$para
 ```
+
 ```{r}
 clusters <- cbind(res.pca$ind$coord[,1:2],cut,df)
 clusters
